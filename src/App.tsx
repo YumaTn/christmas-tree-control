@@ -15,14 +15,14 @@ const CONFIG = {
     iceBlue: 0xaaddff, white: 0xffffff, bearBrown: 0x8B4513
   },
   particles: {
-    count: 3000, 
+    count: 3000, // Số lượng hạt tối ưu cho chữ dày mà không quá lag
     dustCount: 1500, 
     treeHeight: 30, 
     treeRadius: 10,
     snowCount: 2000, 
     snowSpeed: 8,
-    giftCount: 20, // Số lượng hộp quà
-    bearCount: 8   // Số lượng gấu bông
+    giftCount: 20, 
+    bearCount: 8
   },
   camera: { z: 55 },
   gestures: { palmOpenThreshold: 0.35, sensitivity: 6.0 }
@@ -93,14 +93,13 @@ class Particle {
     const h = CONFIG.particles.treeHeight;
     let t = Math.random();
     
-    // Logic xếp cây thông
+    // Logic xếp cây thông: Chừa chỗ cho quà và gấu ở dưới đáy
     if (Math.random() > 0.7 && !this.isDust && this.type !== 'PHOTO' && this.type !== 'GIFT' && this.type !== 'BEAR') {
       const y = (t * h) - h / 2;
       const angle = t * Math.PI * 14; 
       const rBase = CONFIG.particles.treeRadius * (1.0 - t);
       this.posTree.set(Math.cos(angle) * rBase, y, Math.sin(angle) * rBase);
     } else {
-      // Hạt thông thường
       t = Math.pow(t, 0.8);
       const y = (t * h) - h / 2;
       const angle = Math.random() * Math.PI * 2;
@@ -137,8 +136,7 @@ class Particle {
         if (this.isTextParticle) {
             s = this.baseScale * 2.5; 
         } else {
-            // Hạt thừa (bao gồm cả quà và gấu) sẽ biến mất khi xếp chữ để chữ rõ nhất
-            s = 0; 
+            s = 0; // Hạt thừa ẩn đi
         }
     }
     else if (mode === 'FOCUS') {
@@ -168,7 +166,7 @@ class Particle {
 
     this.mesh.position.lerp(_tempVec, lerpSpeed * dt);
 
-    // --- LOGIC ĐỔI MÀU (Gesture 2 - Theme Switch) ---
+    // --- LOGIC ĐỔI MÀU (Dựa trên Theme Index) ---
     if (this.hasEmissive && (mode === 'TREE' || mode === 'NAME_MODE') && !this.isDust) {
       const blink = Math.sin(time * 2 + this.offset);
       const mat = (this.mesh as THREE.Mesh).material as THREE.MeshStandardMaterial;
@@ -177,10 +175,11 @@ class Particle {
       
       if (mode === 'NAME_MODE' && this.isTextParticle) {
           intensity = 1.5 + blink * 1.0;
+          // Đổi màu ngay lập tức theo Theme
           if (themeIndex === 0) { 
-             mat.emissive.setHex(0xffaa00); 
+             mat.emissive.setHex(0xffaa00); // Vàng
           } else { 
-             mat.emissive.setHex(0x00ffff); 
+             mat.emissive.setHex(0x00ffff); // Xanh
           }
       } else {
          if (this.baseEmissive) mat.emissive.copy(this.baseEmissive);
@@ -192,7 +191,7 @@ class Particle {
       if (this.isDust) s = this.baseScale * (0.5 + 0.5 * Math.sin(time * 3 + this.offset));
       else if ((mode === 'SCATTER' || mode === 'LETTER') && this.type === 'PHOTO') s = this.baseScale * 2.5;
       else if (this.type === 'GIFT' || this.type === 'BEAR') {
-         // Quà và gấu giữ nguyên kích thước hoặc scale nhẹ khi bung
+         // Gấu và quà khi bung ra sẽ to hơn xíu cho đẹp
          s = this.baseScale;
          if (mode === 'SCATTER') s = this.baseScale * 1.2;
       }
@@ -223,7 +222,7 @@ const ChristmasTree: React.FC = () => {
     rotation: { x: 0, y: 0 }, spinVel: { x: 0, y: 0 }, time: 0,
     wasPointing: false, palmCenter: { x: 0.5, y: 0.5 }, hasPalmCenter: false,
     starMesh: null, starHaloMesh: null,
-    letterContent: "Trong khoảnh khắc đặc biệt này,\ntôi muốn nói với bạn rằng,\nbạn chính là dải ngân hà lấp lánh trong mắt tôi.",
+    letterContent: "Giáng sinh này anh không cần quà gì sang chảnh đâu, chỉ cần em 'ship' cho anh một chút quan tâm là đủ ấm rồi. Chúc em Noel vui vẻ và bớt đáng yêu lại chút nhé, không là anh không thoát ra khỏi cái sự mập mờ này được đâu!Giáng sinh này anh không cần quà gì sang chảnh đâu, chỉ cần em 'ship' cho anh một chút quan tâm là đủ ấm rồi. Chúc em Noel vui vẻ và bớt đáng yêu lại chút nhé, không là anh không thoát ra khỏi cái sự mập mờ này được đâu!",
     letterLastTriggerTime: 0, musicData: null
   });
 
@@ -283,6 +282,11 @@ const ChristmasTree: React.FC = () => {
     T.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
     T.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     T.renderer.toneMappingExposure = 1.0;
+    
+    // Clear old canvas if any (Hot reload fix)
+    while (containerRef.current.firstChild) {
+        containerRef.current.removeChild(containerRef.current.firstChild);
+    }
     containerRef.current.appendChild(T.renderer.domElement);
 
     T.bgGroup = new THREE.Group(); T.scene.add(T.bgGroup);
@@ -423,12 +427,10 @@ const ChristmasTree: React.FC = () => {
     // Helpers to create Gifts and Bears
     const createGift = () => {
         const group = new THREE.Group();
-        // Box Base
         const boxMat = Math.random() > 0.5 ? T.matLib.red : T.matLib.green;
         const box = new THREE.Mesh(new THREE.BoxGeometry(1.5, 1.5, 1.5), boxMat);
         group.add(box);
         
-        // Ribbon
         const ribbonMat = T.matLib.gold;
         const r1 = new THREE.Mesh(new THREE.BoxGeometry(1.55, 1.55, 0.3), ribbonMat);
         const r2 = new THREE.Mesh(new THREE.BoxGeometry(0.3, 1.55, 1.55), ribbonMat);
@@ -441,23 +443,19 @@ const ChristmasTree: React.FC = () => {
         const group = new THREE.Group();
         const mat = T.matLib.bearBrown;
         
-        // Body
         const body = new THREE.Mesh(new THREE.SphereGeometry(1, 16, 16), mat);
         body.position.y = 0;
         group.add(body);
         
-        // Head
         const head = new THREE.Mesh(new THREE.SphereGeometry(0.75, 16, 16), mat);
         head.position.y = 1.1;
         group.add(head);
 
-        // Ears
         const earGeo = new THREE.SphereGeometry(0.25, 8, 8);
         const earL = new THREE.Mesh(earGeo, mat); earL.position.set(-0.6, 1.7, 0);
         const earR = new THREE.Mesh(earGeo, mat); earR.position.set(0.6, 1.7, 0);
         group.add(earL); group.add(earR);
 
-        // Arms
         const armGeo = new THREE.SphereGeometry(0.35, 8, 8);
         const armL = new THREE.Mesh(armGeo, mat); armL.position.set(-0.9, 0.2, 0.4);
         const armR = new THREE.Mesh(armGeo, mat); armR.position.set(0.9, 0.2, 0.4);
@@ -495,7 +493,6 @@ const ChristmasTree: React.FC = () => {
         gift.scale.set(s,s,s);
         T.mainGroup.add(gift);
         const p = new Particle(gift, 'GIFT', false);
-        // Overwrite position to be at tree base
         const angle = Math.random() * Math.PI * 2;
         const r = 4 + Math.random() * 8; 
         p.posTree.set(Math.cos(angle)*r, -CONFIG.particles.treeHeight/2 + 1.0, Math.sin(angle)*r);
@@ -509,11 +506,9 @@ const ChristmasTree: React.FC = () => {
         bear.scale.set(s,s,s);
         T.mainGroup.add(bear);
         const p = new Particle(bear, 'BEAR', false);
-        // Overwrite position
         const angle = Math.random() * Math.PI * 2;
         const r = 5 + Math.random() * 7;
         p.posTree.set(Math.cos(angle)*r, -CONFIG.particles.treeHeight/2 + 1.5, Math.sin(angle)*r);
-        // Rotate to look outside
         bear.lookAt(new THREE.Vector3(0, bear.position.y, 0));
         T.particleSystem.push(p);
     }
@@ -565,6 +560,7 @@ const ChristmasTree: React.FC = () => {
               p.posText.copy(pixels[i]);
               p.isTextParticle = true; 
           } else {
+              // Hạt thừa: Bay ngẫu nhiên xung quanh
               const r = 30 + Math.random() * 20;
               const theta = Math.random() * Math.PI * 2;
               const phi = Math.acos(2 * Math.random() - 1);
@@ -616,46 +612,48 @@ const ChristmasTree: React.FC = () => {
     STATE.starMesh = star;
     STATE.starHaloMesh = halo;
 
-    // Init MediaPipe
-    // MediaPipe Prediction
-    if (showWebcam && mpRefs.current.handLandmarker && videoRef.current && canvasRef.current) {
-      // Chỉ nhận diện khi video đang chạy và có kích thước thật
-      if (videoRef.current.readyState >= 2 && videoRef.current.videoWidth > 0) {
-          
-          // Đồng bộ kích thước hiển thị
-          const vWidth = videoRef.current.videoWidth;
-          const vHeight = videoRef.current.videoHeight;
-          
-          if (canvasRef.current.width !== vWidth || canvasRef.current.height !== vHeight) {
-              canvasRef.current.width = vWidth;
-              canvasRef.current.height = vHeight;
-          }
+    // --- INIT MEDIAPIPE (SỬA LỖI TS6133) ---
+    const initMP = async () => {
+      try {
+        console.log("Loading MediaPipe...");
+        const vision = await FilesetResolver.forVisionTasks(
+          "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3/wasm"
+        );
+        
+        mpRefs.current.handLandmarker = await HandLandmarker.createFromOptions(vision, {
+          baseOptions: {
+            modelAssetPath: `https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task`,
+            delegate: "GPU"
+          },
+          runningMode: "VIDEO",
+          numHands: 1,
+          minHandDetectionConfidence: 0.5,
+          minHandPresenceConfidence: 0.5,
+          minTrackingConfidence: 0.5
+        });
+        
+        mpRefs.current.canvasCtx = canvasRef.current!.getContext('2d');
+        mpRefs.current.drawingUtils = new DrawingUtils(mpRefs.current.canvasCtx!);
 
-          // Gọi nhận diện
-          const startTimeMs = performance.now();
-          if (mpRefs.current.lastVideoTime !== videoRef.current.currentTime) {
-              mpRefs.current.lastVideoTime = videoRef.current.currentTime;
-              
-              const result = mpRefs.current.handLandmarker.detectForVideo(videoRef.current, startTimeMs);
-
-              const ctx = mpRefs.current.canvasCtx;
-              if (ctx) {
-                  ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
-                  
-                  if (result.landmarks && result.landmarks.length > 0) {
-                      // Vẽ khung xương
-                      mpRefs.current.drawingUtils?.drawConnectors(result.landmarks[0], HandLandmarker.HAND_CONNECTIONS, { color: "#00FF00", lineWidth: 3 });
-                      mpRefs.current.drawingUtils?.drawLandmarks(result.landmarks[0], { color: "#FF0000", lineWidth: 2, radius: 3 });
-                      
-                      // Xử lý logic game
-                      processGestures(result.landmarks[0]);
-                  } else {
-                      STATE.hand.detected = false;
-                  }
-              }
-          }
+        if (navigator.mediaDevices?.getUserMedia) {
+           const stream = await navigator.mediaDevices.getUserMedia({ 
+             video: { facingMode: "user", width: { ideal: 640 }, height: { ideal: 480 } } 
+           });
+           
+           if (videoRef.current) {
+             videoRef.current.srcObject = stream;
+             videoRef.current.onloadedmetadata = () => {
+                videoRef.current!.play();
+                setShowWebcam(true); // Call to use the setter
+             };
+           }
+        }
+      } catch (e) {
+        console.error("Lỗi khởi tạo AI:", e);
       }
-    }
+      setIsLoading(false); // Call to use the setter
+    };
+    initMP(); // Call the function
 
     // Animation Loop
     let animationId: number;
@@ -664,7 +662,7 @@ const ChristmasTree: React.FC = () => {
       const dt = T.clock.getDelta();
       STATE.time = T.clock.elapsedTime;
 
-      // MediaPipe Prediction
+      // MediaPipe Prediction & Drawing
       if (showWebcam && mpRefs.current.handLandmarker && videoRef.current && canvasRef.current) {
         if (videoRef.current.readyState >= 2 && videoRef.current.videoWidth > 0) {
             const vWidth = videoRef.current.videoWidth;
@@ -683,8 +681,10 @@ const ChristmasTree: React.FC = () => {
                 if (ctx) {
                     ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
                     if (result.landmarks && result.landmarks.length > 0) {
+                        // Vẽ khung xương tay
                         mpRefs.current.drawingUtils?.drawConnectors(result.landmarks[0], HandLandmarker.HAND_CONNECTIONS, { color: "#00FF00", lineWidth: 3 });
                         mpRefs.current.drawingUtils?.drawLandmarks(result.landmarks[0], { color: "#FF0000", lineWidth: 2, radius: 3 });
+                        
                         processGestures(result.landmarks[0]);
                     } else {
                         STATE.hand.detected = false;
@@ -802,7 +802,6 @@ const ChristmasTree: React.FC = () => {
       // Xử lý đổi màu Gấu và Quà
       if (p.type === 'GIFT') {
           const group = p.mesh as THREE.Group;
-          // Box is children[0], Ribbon is children[1], [2]
           if (group.children[0]) {
               const boxMesh = group.children[0] as THREE.Mesh;
               if (isGold) {
@@ -873,7 +872,7 @@ const ChristmasTree: React.FC = () => {
             STATE.mode = 'NAME_MODE';
             STATE.spinVel.x = 0; STATE.spinVel.y = 0;
         }
-        return; 
+        // Không return ngay để cho phép V-Sign đổi màu ở dưới xử lý tiếp
     }
 
     // --- 2. CỬ CHỈ NẮM TAY (THOÁT VỀ CÂY) ---
@@ -883,11 +882,11 @@ const ChristmasTree: React.FC = () => {
         if (STATE.mode === 'NAME_MODE' || STATE.mode === 'SCATTER') {
             STATE.mode = 'TREE';
         }
-        return;
+        return; // Thoát hẳn về cây thì return
     }
 
     // --- 3. CỬ CHỈ V-SIGN (ĐỔI MÀU / THEME) ---
-    // QUAN TRỌNG: Đặt logic này TRƯỚC khi return NAME_MODE để có thể đổi màu khi đang hiện chữ
+    // Kiểm tra V-sign trước khi chặn NAME_MODE
     const isVHigh = dIndex > palmSize * 1.3 && dMiddle > palmSize * 1.3;
     const isOthersLow = dRing < dIndex * 0.5 && dPinky < dMiddle * 0.5;
     const isSpread = dist(8, 12) > dist(5, 9) * 1.2;
@@ -899,12 +898,12 @@ const ChristmasTree: React.FC = () => {
       }
     }
 
-    // --- XỬ LÝ RIÊNG CHO NAME MODE: MỞ TAY THÌ BUNG RA ---
+    // --- XỬ LÝ RIÊNG CHO NAME MODE ---
     if (STATE.mode === 'NAME_MODE') {
         if (isPalmOpen) {
             // Mở tay -> Cho phép xuống logic SCATTER
         } else {
-            // Chưa mở tay -> Giữ nguyên chữ, return để chặn các cử chỉ khác làm rối
+            // Chưa mở tay -> Giữ nguyên chữ, return để chặn logic Pointing
             return; 
         }
     }
